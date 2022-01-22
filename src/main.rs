@@ -13,6 +13,8 @@ struct State {
     buffer: Audio<Mono32>,
     sample_length: usize,
     frequency_limit: FrequencyLimit,
+    is_whistle_detected: bool,
+    threshold: f32,
 }
 
 impl State {
@@ -44,8 +46,17 @@ impl State {
                         println!("{}Hz => {}", fr, fr_val)
                     }
 
+                    self.buffer = Audio::with_silence(48_000, 0);
+
+                    let weighted_range_sum = 2.3;
+                    if weighted_range_sum > self.threshold {
+                        self.is_whistle_detected = true;
+
+                        std::process::exit(0);
+                    }
+
                     //println!("{:?}", test);
-                    //std::process::exit(0);
+                    
                 }
 
                 //println!("{:?}", self.buffer.sample_rate());
@@ -60,11 +71,15 @@ fn main() {
         buffer: Audio::with_silence(48_000, 0),
         sample_length: 4096,
         frequency_limit: FrequencyLimit::Range(200.0, 300.0),
+        is_whistle_detected: false, 
+        threshold: 5.0,
     };
     let mut microphone = Microphone::default();
 
     exec!(state.event(wait! {
         Event::Record(microphone.record().await),
         Event::Analyze(),
-    }))
+    }));
+
+    //println!("Whistle detected: {:?}", state.is_whistle_detected);
 }
