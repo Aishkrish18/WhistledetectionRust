@@ -2,9 +2,9 @@
 edition = "2021"
 name = "whistledetection"
 version = "0.1.0"
-
 [dependencies]
 fon = "0.4"
 pasts = "0.7"
 spectrum-analyzer = "1.2.3"
+tokio = {version="1.15.0", features=["full"]}
 wavy = "0.8"
