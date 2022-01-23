@@ -1,7 +1,11 @@
 use fon::{mono::Mono32, Audio};
 use pasts::{exec, wait};
 use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
+use tokio::spawn;
 use wavy::{Microphone, MicrophoneStream};
+
+use std::fs::File;
+use std::io::prelude::*;
 
 enum Event<'a> {
     Record(MicrophoneStream<'a, Mono32>),
@@ -28,8 +32,7 @@ impl State {
             }
             Event::Analyze() => {
                 if self.buffer.len() >= self.sample_length {
-                    // let buffer_stream = self.buffer.drain();
-                    // let test = buffer_stream.take(4);
+                    // buffer is full enough
 
                     let buffer_slice = self.buffer.as_f32_slice();
                     let samples = &buffer_slice
@@ -47,6 +50,9 @@ impl State {
                     let mut base = false;
                     let mut overtone_1 = false;
                     let mut overtone_2 = false;
+
+                    // let mut file = File::create("exported_spectrum.csv").unwrap();
+
                     for (fr, fr_val) in frequency_spectrum.data().iter() {
                         if fr.val() >= 2000.0 && fr.val() <= 4000.0 {
                             if fr_val.val() > self.threshold_base {
@@ -65,44 +71,49 @@ impl State {
                             }
                         }
 
+                        // let data = format!("{} {} ", fr.val(), fr_val.val());
+                        // write!(file, "{}", data);
+
                         //println!("{}Hz => {}", fr, fr_val)
+                    }
+
+                    if base && overtone_1 && overtone_2 {
+                        self.is_whistle_detected = true;
+                        println!("Whistle was detected!");
+                        std::process::exit(0);
                     }
 
                     self.buffer = Audio::with_silence(48_000, 0);
 
-                    //let weighted_range_sum = 2.3;
-                    //if weighted_range_sum > self.threshold{
-                    //    self.is_whistle_detected = true;
-
-                    //    std::process::exit(0);
-                    //}
-
-                    println!("{:?}", self.is_whistle_detected);
+                    //std::process::exit(0);
                 }
-
-                //println!("{:?}", self.buffer.sample_rate());
-                //println!("{:?}", self.buffer.len());
             }
         }
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut state = State {
         buffer: Audio::with_silence(48_000, 0),
         sample_length: 4096,
         frequency_limit: FrequencyLimit::Range(1000.0, 7500.0),
         is_whistle_detected: false,
-        threshold_base: 5.0,
-        threshold_overtone_1: 2.0,
-        threshold_overtone_2: 1.0,
+        threshold_base: 300.0,
+        threshold_overtone_1: 0.0,
+        threshold_overtone_2: 0.0,
     };
     let mut microphone = Microphone::default();
 
-    exec!(state.event(wait! {
-        Event::Record(microphone.record().await),
-        Event::Analyze(),
-    }));
+    let stream = microphone.record::<Mono32>().await;
+    state.buffer.extend(stream);
+
+    // exec!(state.event(wait! {
+    //     Event::Record(microphone.record().await),
+    //     Event::Analyze(),
+    // }));
+
+    //let x = state.is_whistle_detected;
 
     //println!("Whistle detected: {:?}", state.event(wait!{Event::Analyze().is_whistle_detected);
 }
