@@ -14,7 +14,9 @@ struct State {
     sample_length: usize,
     frequency_limit: FrequencyLimit,
     is_whistle_detected: bool,
-    threshold: f32,
+    threshold_base: f32,
+    threshold_overtone_1: f32,
+    threshold_overtone_2: f32,
 }
 
 impl State {
@@ -42,21 +44,40 @@ impl State {
                     )
                     .unwrap();
 
+                    let mut base = false;
+                    let mut overtone_1 = false;
+                    let mut overtone_2 = false;
                     for (fr, fr_val) in frequency_spectrum.data().iter() {
-                        println!("{}Hz => {}", fr, fr_val)
+                        if fr.val() >= 2000.0 && fr.val() <= 4000.0 {
+                            if fr_val.val() > self.threshold_base {
+                                println!("Base threshold is reached {:?}", fr);
+                                base = true;
+                            }
+                        } else if fr.val() > 4000.0 && fr.val() <= 5000.0 {
+                            if fr_val.val() > self.threshold_overtone_1 {
+                                println!("First Threshold Overtone is reached {:?}", fr);
+                                overtone_1 = true;
+                            }
+                        } else if fr.val() > 6000.0 && fr.val() <= 7200.0 {
+                            if fr_val.val() > self.threshold_overtone_2 {
+                                println!("Second Threshold Overtone is reached {:?}", fr);
+                                overtone_2 = true;
+                            }
+                        }
+
+                        //println!("{}Hz => {}", fr, fr_val)
                     }
 
                     self.buffer = Audio::with_silence(48_000, 0);
 
-                    let weighted_range_sum = 2.3;
-                    if weighted_range_sum > self.threshold {
-                        self.is_whistle_detected = true;
+                    //let weighted_range_sum = 2.3;
+                    //if weighted_range_sum > self.threshold{
+                    //    self.is_whistle_detected = true;
 
-                        std::process::exit(0);
-                    }
+                    //    std::process::exit(0);
+                    //}
 
-                    //println!("{:?}", test);
-                    
+                    println!("{:?}", self.is_whistle_detected);
                 }
 
                 //println!("{:?}", self.buffer.sample_rate());
@@ -70,9 +91,11 @@ fn main() {
     let mut state = State {
         buffer: Audio::with_silence(48_000, 0),
         sample_length: 4096,
-        frequency_limit: FrequencyLimit::Range(200.0, 300.0),
-        is_whistle_detected: false, 
-        threshold: 5.0,
+        frequency_limit: FrequencyLimit::Range(1000.0, 7500.0),
+        is_whistle_detected: false,
+        threshold_base: 5.0,
+        threshold_overtone_1: 2.0,
+        threshold_overtone_2: 1.0,
     };
     let mut microphone = Microphone::default();
 
@@ -81,5 +104,5 @@ fn main() {
         Event::Analyze(),
     }));
 
-    //println!("Whistle detected: {:?}", state.is_whistle_detected);
+    //println!("Whistle detected: {:?}", state.event(wait!{Event::Analyze().is_whistle_detected);
 }
