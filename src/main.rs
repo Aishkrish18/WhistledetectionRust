@@ -1,20 +1,12 @@
 use fon::chan::Ch32;
 use fon::mono::Mono;
 use fon::{mono::Mono32, Audio};
-use pasts::{exec, wait};
 use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
-use tokio::spawn;
 use wavy::{Microphone, MicrophoneStream};
 
 use std::fs::File;
 use std::io::prelude::*;
 
-enum Event<'a> {
-    Record(MicrophoneStream<'a, Mono32>),
-    Analyze(),
-}
-
-/// Shared state between tasks on the thread.
 struct State {
     buffer: Audio<Mono32>,
     sample_length: usize,
@@ -25,12 +17,11 @@ struct State {
     threshold_overtone_2: f32,
 }
 
-fn record(mut state: State, stream: MicrophoneStream<Mono<Ch32>>) -> State {
+fn record(state: &mut State, stream: MicrophoneStream<Mono<Ch32>>) {
     state.buffer.extend(stream);
-    state
 }
 
-fn analyze(mut state: State) -> State {
+fn analyze(state: &mut State) {
     if state.buffer.len() >= state.sample_length {
         // buffer is full enough
 
@@ -78,25 +69,21 @@ fn analyze(mut state: State) -> State {
 
         if base && overtone_1 && overtone_2 {
             state.is_whistle_detected = true;
-            println!("Whistle was detected!");
-            std::process::exit(0);
+            //std::process::exit(0);
         }
 
-        state.buffer = Audio::with_silence(48_000, 0);
-
-        //std::process::exit(0);
+        state.buffer = Audio::with_silence(48_000, 0); // clear buffer
     }
-    state
 }
 
 #[tokio::main]
 async fn main() {
     let mut state = State {
         buffer: Audio::with_silence(48_000, 0),
-        sample_length: 4096,
+        sample_length: 4096, // powers of 2, maximal 4096
         frequency_limit: FrequencyLimit::Range(1000.0, 7500.0),
         is_whistle_detected: false,
-        threshold_base: 300.0,
+        threshold_base: 50.0, // yet to be found
         threshold_overtone_1: 0.0,
         threshold_overtone_2: 0.0,
     };
@@ -104,9 +91,8 @@ async fn main() {
     let mut microphone = Microphone::default();
 
     while !state.is_whistle_detected {
-        let stream = microphone.record::<Mono32>().await;
-        state = record(state, stream);
-        state = analyze(state);
+        record(&mut state, microphone.record::<Mono32>().await);
+        analyze(&mut state);
         println!("Whistle detected: {:?}", state.is_whistle_detected);
     }
 }
